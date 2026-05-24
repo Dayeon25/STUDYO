@@ -1,7 +1,11 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { EducationLevel, Annotation, Quiz, StudyInsight, CopyrightReport, SummaryData, LectureScript, WeeklyLetter, KnowledgeGraph, ClozeQuiz, ActiveRecallReport, ChatMessage, Flashcard } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Fallback-safe API key retrieval that prevents "ReferenceError: process is not defined" in pure client-side builds.
+// In Vite, process.env.GEMINI_API_KEY is replaced inline at build time, but during local or edge environments
+// where the substitution is omitted, this typeof guard ensures the app loads gracefully rather than showing a white screen.
+const apiKey = typeof process !== "undefined" ? (process.env?.GEMINI_API_KEY || "") : "";
+const ai = new GoogleGenAI({ apiKey });
 
 export async function generateQuiz(text: string, level: EducationLevel, lang: string = "Korean") {
   const prompt = `
