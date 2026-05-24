@@ -1,11 +1,44 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { EducationLevel, Annotation, Quiz, StudyInsight, CopyrightReport, SummaryData, LectureScript, WeeklyLetter, KnowledgeGraph, ClozeQuiz, ActiveRecallReport, ChatMessage, Flashcard } from "../types";
 
-// Fallback-safe API key retrieval that prevents "ReferenceError: process is not defined" in pure client-side builds.
-// In Vite, process.env.GEMINI_API_KEY is replaced inline at build time, but during local or edge environments
-// where the substitution is omitted, this typeof guard ensures the app loads gracefully rather than showing a white screen.
-const apiKey = typeof process !== "undefined" ? (process.env?.GEMINI_API_KEY || "") : "";
-const ai = new GoogleGenAI({ apiKey });
+// Fallback-safe lazy initialization for GoogleGenAI.
+// In client-only bundles or static Vercel hosting, the global 'process' object is undefined,
+// and importing/constructing the SDK on initial load can throw an uncaught exception, resulting in a blank white screen.
+// This Proxy lazily instantiates the SDK only when an API call is actively made, preventing startup crashes.
+let _aiInstance: GoogleGenAI | null = null;
+
+function getAI(): GoogleGenAI {
+  if (!_aiInstance) {
+    let apiKey = "";
+    try {
+      apiKey = process.env.GEMINI_API_KEY || "";
+    } catch (e) {
+      // process is undefined in standard browser runtimes
+    }
+    
+    _aiInstance = new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    });
+  }
+  return _aiInstance;
+}
+
+// Dynamic transparent proxy to preserve original SDK call syntax (e.g. ai.models.generateContent)
+const ai = new Proxy({} as GoogleGenAI, {
+  get(target, prop, receiver) {
+    const instance = getAI();
+    const value = Reflect.get(instance, prop);
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  }
+});
 
 export async function generateQuiz(text: string, level: EducationLevel, lang: string = "Korean") {
   const prompt = `
